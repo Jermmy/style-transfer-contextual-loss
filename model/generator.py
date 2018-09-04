@@ -90,10 +90,10 @@ class Down(nn.Module):
     def __init__(self, size, in_channels, out_channels):
         super(Down, self).__init__()
         self.size = size
-        self.features = [nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3)),
+        self.features = [nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), padding=1),
                          nn.BatchNorm2d(out_channels),
                          nn.LeakyReLU(0.2),
-                         nn.Conv2d(out_channels, out_channels, kernel_size=(3, 3)),
+                         nn.Conv2d(out_channels, out_channels, kernel_size=(3, 3), padding=1),
                          nn.BatchNorm2d(out_channels),
                          nn.LeakyReLU(0.2)]
         self.features = nn.Sequential(*self.features)
@@ -101,7 +101,7 @@ class Down(nn.Module):
 
     def forward(self, image, x=None):
         out = self.upsample(image)
-        if x:
+        if x is not None:
             out = torch.cat([x, out], dim=1)
 
         return self.features(out)
@@ -120,24 +120,27 @@ class Generator(nn.Module):
         self.out_dims = [256, 256, 512, 512, 512, 512, 512]
 
         self.conv = nn.Conv2d(256, 3, kernel_size=(1, 1))
-        self.down1 = Down(image_size, 259, 256)
-        self.donw2 = Down(image_size // 2, 515, 256)
-        self.down3 = Down(image_size // 4, 515, 512)
-        self.down4 = Down(image_size // 8, 515, 512)
-        self.down5 = Down(image_size // 16, 515, 512)
-        self.down6 = Down(image_size // 32, 515, 512)
-        self.down7 = Down(image_size // 64, 3, 512)
-
+        self.down1 = Down(self.image_sizes[0], 259, 256)
+        self.donw2 = Down(self.image_sizes[1], 515, 256)
+        self.down3 = Down(self.image_sizes[2], 515, 512)
+        self.down4 = Down(self.image_sizes[3], 515, 512)
+        self.down5 = Down(self.image_sizes[4], 515, 512)
+        self.down6 = Down(self.image_sizes[5], 515, 512)
+        self.down7 = Down(self.image_sizes[6], 3, 512)
 
     def forward(self, x):
-        print(x.shape)
-        print(self.down7)
         down7 = self.down7(x)
+        down7 = F.interpolate(down7, size=(self.image_sizes[-2], self.image_sizes[-2]), mode='bilinear')
         down6 = self.down6(x, down7)
+        down6 = F.interpolate(down6, size=(self.image_sizes[-3], self.image_sizes[-3]), mode='bilinear')
         down5 = self.down5(x, down6)
+        down5 = F.interpolate(down5, size=(self.image_sizes[-4], self.image_sizes[-4]), mode='bilinear')
         down4 = self.down4(x, down5)
+        down4 = F.interpolate(down4, size=(self.image_sizes[-5], self.image_sizes[-5]), mode='bilinear')
         down3 = self.down3(x, down4)
+        down3 = F.interpolate(down3, size=(self.image_sizes[-6], self.image_sizes[-6]), mode='bilinear')
         down2 = self.donw2(x, down3)
+        down2 = F.interpolate(down2, size=(self.image_sizes[-7], self.image_sizes[-7]), mode='bilinear')
         down1 = self.down1(x, down2)
         return self.conv(down1)
 

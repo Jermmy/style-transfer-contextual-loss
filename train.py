@@ -5,9 +5,10 @@ from model.vgg import VGG19
 import torch
 import torch.optim as optim
 import torchvision.transforms as transforms
-
+import numpy as np
 import argparse
 import collections
+import matplotlib.pyplot as plt
 import os
 from os.path import exists, join
 
@@ -23,7 +24,7 @@ def main(config):
     ])
 
     train_dataset = TrainDataset(train_dir=config.train_dir, style_image=config.style_image, transforms=transform)
-    test_dataset = TestDataset(test_dir=config.test_dir)
+    test_dataset = TestDataset(test_dir=config.test_dir, transforms=transform)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.batch_size,
                                                shuffle=True, num_workers=config.num_workers)
@@ -68,7 +69,6 @@ def main(config):
             _, vgg_content = vgg19(content)
             vgg_style, _ = vgg19(style)
             fake = generator(content)
-            print(fake.shape)
             fake_style, fake_content = vgg19(fake)
 
             cx_style_loss = config.lambda_style * cxloss(vgg_style, fake_style)
@@ -79,23 +79,34 @@ def main(config):
             loss.backward()
             optimizer.step()
 
-            if i % 100 == 0:
+            if i % 10 == 0:
                 print("Epoch: %d/%d | Step: %d/%d | Style loss: %f | Content loss: %f | Loss: %f" %
                       (epoch, config.epochs+1, i, len(train_loader), cx_style_loss.item(), cx_content_loss.item(), loss.item()))
 
-            # if i % 100 == 0:
-
             if (i + 1) % 500 == 0:
                 torch.save(generator.state_dict(), join(config.ckpt_path, 'epoch-%d.pkl' % epoch))
+
+        for i, data in enumerate(test_loader):
+            generator.eval()
+            result_path = join(config.result_path, 'epoch_%d' % epoch)
+            if not exists(result_path):
+                os.makedirs(result_path)
+
+            content = data['content'].to(device).float()
+            fake = generator(content)
+            fake = (fake.detach().cpu().numpy()[0] * 255).astype(np.uint8)
+            plt.imshow(fake)
+            plt.savefig(join(result_path, 'step-%d.png' % (i+1)))
+            generator.train()
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--image_size', type=int, default=256)
-    parser.add_argument('--train_dir', type=str, default='single/train')
-    parser.add_argument('--style_image', type=str, default='single/4.jpg')
-    parser.add_argument('--test_dir', type=str, default='single/test')
+    parser.add_argument('--train_dir', type=str, default='dataset/train')
+    parser.add_argument('--style_image', type=str, default='dataset/4.jpg')
+    parser.add_argument('--test_dir', type=str, default='dataset/test')
     parser.add_argument('--vgg', type=str, default='vgg19-dcbb9e9d.pth')
     parser.add_argument('--ckpt_path', type=str, default='ckpts/')
     parser.add_argument('--result_path', type=str, default='results/')
