@@ -85,53 +85,59 @@ class CXLoss(nn.Module):
         return CX
 
 
+class Down(nn.Module):
+
+    def __init__(self, size, in_channels, out_channels):
+        super(Down, self).__init__()
+        self.size = size
+        self.features = [nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3)),
+                         nn.BatchNorm2d(out_channels),
+                         nn.LeakyReLU(0.2),
+                         nn.Conv2d(out_channels, out_channels, kernel_size=(3, 3)),
+                         nn.BatchNorm2d(out_channels),
+                         nn.LeakyReLU(0.2)]
+        self.features = nn.Sequential(*self.features)
+        self.upsample = nn.Upsample(size=(self.size, self.size), mode='bilinear')
+
+    def forward(self, image, x=None):
+        out = self.upsample(image)
+        if x:
+            out = torch.cat([x, out], dim=1)
+
+        return self.features(out)
+
+
 class Generator(nn.Module):
 
-    def __init__(self):
+    def __init__(self, image_size):
         super(Generator, self).__init__()
+
+        self.image_size = image_size
 
         self.image_sizes = [256, 128, 64, 32, 16, 8, 4]
 
         self.in_dims = [259, 515, 515, 515, 515, 515, 3]
         self.out_dims = [256, 256, 512, 512, 512, 512, 512]
 
-        self.features = []
-        self.transforms = []
+        self.conv = nn.Conv2d(256, 3, kernel_size=(1, 1))
+        self.down1 = Down(image_size, 259, 256)
+        self.donw2 = Down(image_size // 2, 515, 256)
+        self.down3 = Down(image_size // 4, 515, 512)
+        self.down4 = Down(image_size // 8, 515, 512)
+        self.down5 = Down(image_size // 16, 515, 512)
+        self.down6 = Down(image_size // 32, 515, 512)
+        self.down7 = Down(image_size // 64, 3, 512)
 
-        for i in range(len(self.image_sizes)):
-            if i == 0:
-                self.features.append(nn.Sequential(
-                    nn.Conv2d(in_channels=self.in_dims[i], out_channels=self.out_dims[i], kernel_size=3),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.Conv2d(in_channels=self.out_dims[i], out_channels=self.out_dims[i], kernel_size=3),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.Conv2d(in_channels=self.out_dims[i], out_channels=3, kernel_size=1)
-                ))
-            else:
-                self.features.append(nn.Sequential(
-                    nn.Conv2d(in_channels=self.in_dims[i], out_channels=self.out_dims[i], kernel_size=3),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.Conv2d(in_channels=self.out_dims[i], out_channels=self.out_dims[i], kernel_size=3),
-                    nn.LeakyReLU(0.2, inplace=True)
-                ))
-            self.transforms.append(transforms.Resize((self.image_sizes[i], self.image_sizes[i])))
 
     def forward(self, x):
-        for i in range(len(self.image_sizes)-1, -1, -1):
-            if i == len(self.image_sizes) - 1:
-                resize_x = self.transforms[i](x)
-                conv_x = self.features[i](resize_x)
-            else:
-                conv_x = self.transforms[i](conv_x)
-                resize_x = self.transforms[i](x)
-                conv_x = torch.cat([conv_x, resize_x], dim=1)
-                conv_x = self.features[i](conv_x)
-
-        conv_x = (conv_x + 1.) / 2. * 255.
-        return conv_x
-
-
-
-
-
+        print(x.shape)
+        print(self.down7)
+        down7 = self.down7(x)
+        down6 = self.down6(x, down7)
+        down5 = self.down5(x, down6)
+        down4 = self.down4(x, down5)
+        down3 = self.down3(x, down4)
+        down2 = self.donw2(x, down3)
+        down1 = self.down1(x, down2)
+        return self.conv(down1)
 
