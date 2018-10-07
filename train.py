@@ -65,14 +65,14 @@ def main(config):
 
             optimizer.zero_grad()
 
-            _, vgg_content = vgg19(content)
-            vgg_style, _ = vgg19(style)
+            vgg_content = vgg19(content)
+            vgg_style = vgg19(style)
             fake = generator(content)
             print(fake.shape)
-            fake_style, fake_content = vgg19(fake)
+            vgg_fake = vgg19(fake)
 
-            cx_style_loss = config.lambda_style * cxloss(vgg_style, fake_style)
-            cx_content_loss = config.lambda_content * cxloss(vgg_content, fake_content)
+            cx_style_loss = config.lambda_style * cxloss(vgg_style['conv3_2'], vgg_fake['conv3_2'])
+            cx_content_loss = config.lambda_content * cxloss(vgg_content['conv4_2'], vgg_fake['conv4_2'])
 
             loss = cx_style_loss + cx_content_loss
 
