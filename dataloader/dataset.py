@@ -20,14 +20,14 @@ class TrainDataset(data.Dataset):
         return len(self.train_images)
 
     def __getitem__(self, idx):
-        content_image = Image.open(self.train_images[idx])
+        source_image = Image.open(self.train_images[idx])
 
-        if content_image.mode == "L":
-            content_image = content_image.convert(mode="RGB")
+        if source_image.mode == "L":
+            source_image = source_image.convert(mode="RGB")
 
-        sample = {'content': content_image, 'style': self.style_image}
+        sample = {'source': source_image, 'style': self.style_image}
         if self.transforms:
-            sample['content'] = self.transforms(sample['content'])
+            sample['source'] = self.transforms(sample['source'])
 
         return sample
 
@@ -47,5 +47,5 @@ class TestDataset(data.Dataset):
         if self.transforms:
             image = self.transforms(image)
 
-        sample = {'content': image}
+        sample = {'source': image}
         return sample

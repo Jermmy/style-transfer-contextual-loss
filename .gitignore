@@ -108,3 +108,5 @@ dataset/
 *.pkl
 single/
 *.pth
+results/
+.idea/

@@ -15,7 +15,6 @@ def conv(in_channels, out_channels):
 mean = [0.485, 0.456, 0.406]
 std = [0.229, 0.224, 0.225]
 
-
 class VGG19(nn.Module):
 
     def __init__(self):
@@ -35,7 +34,7 @@ class VGG19(nn.Module):
         self.conv4_2 = nn.Sequential(conv(512, 512), nn.ReLU())
 
     def forward(self, input_images):
-
+        input_images = (input_images - mean) / std
         feature = {}
         feature['conv1_1'] = self.conv1_1(input_images)
         feature['conv1_2'] = self.conv1_2(feature['conv1_1'])
@@ -52,3 +51,4 @@ class VGG19(nn.Module):
         feature['conv4_2'] = self.conv4_2(feature['conv4_1'])
 
         return feature
+
