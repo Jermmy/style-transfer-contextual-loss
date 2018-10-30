@@ -51,6 +51,8 @@ class CXLoss(nn.Module):
         featureI = featureI.permute((0, 2, 3, 1))
         featureT = featureT.permute((0, 2, 3, 1))
 
+        print(featureI.shape)
+
         featureI, featureT = self.center_by_T(featureI, featureT)
 
         featureI = self.l2_normalize_channelwise(featureI)
@@ -71,6 +73,8 @@ class CXLoss(nn.Module):
         # NHWC
         dist = torch.cat(dist, dim=0)
 
+        print(dist.shape)
+
         raw_dist = (1. - dist) / 2.
 
         relative_dist = self.calc_relative_distances(raw_dist)
@@ -82,6 +86,21 @@ class CXLoss(nn.Module):
         CX = -torch.log(CX)
         CX = torch.mean(CX)
         return CX
+
+
+def init_params(modules):
+    for m in modules:
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight, mode='fan_out')
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight, 1)
+            nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
 
 class Down(nn.Module):
@@ -128,6 +147,8 @@ class Generator(nn.Module):
         self.down6 = Down(self.image_sizes[5], 515, 512)
         self.down7 = Down(self.image_sizes[6], 3, 512)
 
+        init_params(self.modules())
+
     def forward(self, x):
         down7 = self.down7(x)
         down7 = F.interpolate(down7, size=(self.image_sizes[-2], self.image_sizes[-2]), mode='bilinear')
@@ -143,21 +164,6 @@ class Generator(nn.Module):
         down2 = F.interpolate(down2, size=(self.image_sizes[-7], self.image_sizes[-7]), mode='bilinear')
         down1 = self.down1(x, down2)
         return (self.conv(down1) + 1.) / 2.
-
-
-def init_params(modules):
-    for m in modules:
-        if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight, mode='fan_out')
-            if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.BatchNorm2d):
-            nn.init.constant_(m.weight, 1)
-            nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.normal_(m.weight, std=0.02)
-            if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
 
 
 # class Down(nn.Module):
@@ -176,29 +182,29 @@ def init_params(modules):
 #
 #     def forward(self, x):
 #         return self.feature(x)
-#
-#
-# class Up(nn.Module):
-#
-#     def __init__(self, in_channels, out_channels, BN=False, IN=True, dropout=True):
-#         super(Up, self).__init__()
-#         modules = [nn.LeakyReLU(0.2, inplace=False),
-#                   nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1)]
-#         if BN:
-#             modules.append(nn.BatchNorm2d(out_channels))
-#         if IN:
-#             modules.append(nn.InstanceNorm2d(out_channels))
-#         if dropout:
-#             modules.append(nn.Dropout(0.5))
-#
-#         self.feature = nn.Sequential(*modules)
-#
-#     def forward(self, c1, c2=None):
-#         c1 = self.feature(c1)
-#         if c2 is not None:
-#             return torch.cat([c1, c2], dim=1)
-#         else:
-#             return c1
+
+
+class Up(nn.Module):
+
+    def __init__(self, in_channels, out_channels, BN=False, IN=True, dropout=True):
+        super(Up, self).__init__()
+        modules = [nn.LeakyReLU(0.2, inplace=False),
+                  nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1)]
+        if BN:
+            modules.append(nn.BatchNorm2d(out_channels))
+        if IN:
+            modules.append(nn.InstanceNorm2d(out_channels))
+        if dropout:
+            modules.append(nn.Dropout(0.5))
+
+        self.feature = nn.Sequential(*modules)
+
+    def forward(self, c1, c2=None):
+        c1 = self.feature(c1)
+        if c2 is not None:
+            return torch.cat([c1, c2], dim=1)
+        else:
+            return c1
 
 
 # class Generator(nn.Module):
@@ -206,7 +212,7 @@ def init_params(modules):
 #     def __init__(self, out_channels=64):
 #         super(Generator, self).__init__()
 #         # 256 x 256 x 6
-#         self.down1 = nn.Conv2d(3, out_channels, kernel_size=4, stride=2, padding=1)
+#         self.down1 = nn.Conv2d(6, out_channels, kernel_size=4, stride=2, padding=1)
 #         # 128 x 128 x 64
 #         self.down2 = Down(out_channels, out_channels * 2)
 #         # 64 x 64 x 128
@@ -241,12 +247,13 @@ def init_params(modules):
 #         # 256 x 256 x 3
 #         self.rec = nn.Sigmoid()
 #
-#     def forward(self, x):
+#     def forward(self, s, t):
 #         '''
 #         :param dImage: degraded image
 #         :param wImage: wrap guidance image
 #         :return:
 #         '''
+#         x = torch.cat([s, t], dim=1)
 #         down1 = self.down1(x)
 #         down2 = self.down2(down1)
 #         down3 = self.down3(down2)

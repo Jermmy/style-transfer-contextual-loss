@@ -20,13 +20,16 @@ std = [0.229, 0.224, 0.225]
 
 def tensor2image(T):
     image = T.detach().cpu().numpy()[0].transpose((1, 2, 0))
-    for i in range(len(mean)):
-        image[:, :, i] = (image[:, :, i] * std[i]) + mean[i]
+    # for i in range(len(mean)):
+    #     image[:, :, i] = (image[:, :, i] * std[i]) + mean[i]
     image = image * 255.
     image = np.minimum(np.maximum(image, 0.0), 255.0)
 
     return image.astype(np.uint8)
 
+
+style_layer = ['conv3_2', 'conv4_2']
+content_layer = ['conv4_2']
 
 def main(config):
 
@@ -34,11 +37,9 @@ def main(config):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    normalize = transforms.Normalize(mean=mean, std=std)
     transform = transforms.Compose([
         transforms.Resize((config.image_size, config.image_size)),
         transforms.ToTensor(),
-        normalize
     ])
 
     train_dataset = TrainDataset(train_dir=config.train_dir, style_image=config.style_image, transforms=transform)
@@ -53,13 +54,11 @@ def main(config):
     pretrained_dict = torch.load(config.vgg)
     temp_dict = collections.OrderedDict()
     vgg19_dict = vgg19.state_dict()
-    for k, v in pretrained_dict.items():
-        # Update conv3_2
-        if k.replace('features', 'conv3_2') in vgg19_dict:
-            temp_dict[k.replace('features', 'conv3_2')] = v
-        # Update conv4_2
-        elif 'conv4_2.' + str(int(k.split('.')[1])-14) + '.' + k.split('.')[2] in vgg19_dict:
-            temp_dict['conv4_2.' + str(int(k.split('.')[1])-14) + '.' + k.split('.')[2]] = v
+    pretrained_keys = list(pretrained_dict.keys())
+    vgg19_keys = list(vgg19_dict.keys())
+    for i in range(len(vgg19_keys)):
+        temp_dict[vgg19_keys[i]] = pretrained_dict[pretrained_keys[i]]
+
     vgg19_dict.update(temp_dict)
     vgg19.load_state_dict(vgg19_dict)
     # Fix parameters
@@ -67,7 +66,8 @@ def main(config):
 
     generator = Generator(image_size=config.image_size).to(device)
     # generator = Generator().to(device)
-    cxloss = CXLoss().to(device)
+    cxLoss = CXLoss(sigma=0.5).to(device)
+    recLoss = torch.nn.MSELoss().to(device)
 
     if config.load_model:
         generator.load_state_dict(torch.load(config.load_model))
@@ -88,24 +88,32 @@ def main(config):
 
             optimizer.zero_grad()
 
-            source_32, source_42 = vgg19(source)
-            style_32, style_42 = vgg19(style)
+            vgg_source = vgg19(source)
+            vgg_style = vgg19(style)
+            # fake = generator(source, style)
             fake = generator(source)
-            for j in range(len(mean)):
-                fake[:, j, :, :] = (fake[:, j, :, :] - mean[j]) / std[j]
-            fake_32, fake_42 = vgg19(fake)
+            vgg_fake = vgg19(fake)
 
-            cx_style_loss = config.lambda_style * (cxloss(style_32, fake_32))
-            cx_content_loss = config.lambda_content * cxloss(source_42, fake_42)
+            cx_style_loss = 0
+            for s in style_layer:
+                cx_style_loss += cxLoss(vgg_style[s], vgg_fake[s])
+            cx_style_loss *= config.lambda_style
 
-            loss = cx_style_loss + cx_content_loss
+            cx_content_loss = 0
+            for s in content_layer:
+                cx_content_loss += cxLoss(vgg_source[s], vgg_fake[s])
+            cx_content_loss *= config.lambda_content
+
+            recon_loss = config.lambda_rec * recLoss(fake, source)
+
+            loss = cx_style_loss + cx_content_loss + recon_loss
 
             loss.backward()
             optimizer.step()
 
             if i % 100 == 0:
-                print("Epoch: %d/%d | Step: %d/%d | Style loss: %f | Content loss: %f | Loss: %f" %
-                      (epoch, config.epochs, i, len(train_loader), cx_style_loss.item(), cx_content_loss.item(), loss.item()))
+                print("Epoch: %d/%d | Step: %d/%d | Style loss: %f | Content loss: %f | Recon loss: %f | Loss: %f" %
+                      (epoch, config.epochs, i, len(train_loader), cx_style_loss.item(), cx_content_loss.item(), recon_loss.item(), loss.item()))
 
             if (i + 1) % 500 == 0:
                 torch.save(generator.state_dict(), join(config.ckpt_path, 'epoch-%d.pkl' % epoch))
@@ -129,6 +137,7 @@ def main(config):
             os.makedirs(result_path)
         for i, data in enumerate(test_loader):
             source = data['source'].to(device).float()
+            # fake = generator(source, style)
             fake = generator(source)
             plt.subplot(131)
             plt.imshow(tensor2image(source))
@@ -154,7 +163,7 @@ def test(config):
     transform = transforms.Compose([
         transforms.Resize((config.image_size, config.image_size)),
         transforms.ToTensor(),
-        normalize
+        # normalize
     ])
 
     test_dataset = TestDataset(test_dir=config.test_dir, transforms=transform)
@@ -198,7 +207,8 @@ if __name__ == '__main__':
     parser.add_argument('--result_path', type=str, default='results/')
     parser.add_argument('--lambda_style', type=float, default=1.0)
     parser.add_argument('--lambda_content', type=float, default=1.0)
-    parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--lambda_rec', type=float, default=1.0)
+    parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--lr', type=float, default=0.0001)
@@ -206,6 +216,8 @@ if __name__ == '__main__':
     parser.add_argument('--start_idx', type=int, default=0)
     # 1 train | 0 test
     parser.add_argument('--train', type=int, default=1)
+
+    parser.add_argument('--recon_loss', type=int, default=1)
 
     config = parser.parse_args()
 
