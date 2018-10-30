@@ -1,5 +1,4 @@
 from model.generator import Generator, CXLoss
-from model.vgg import VGG19
 from dataloader.dataset import TrainDataset, TestDataset
 from model.vgg import VGG19
 import torch
@@ -7,7 +6,6 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 import numpy as np
 import argparse
-import collections
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -31,6 +29,7 @@ def tensor2image(T):
 style_layer = ['conv3_2', 'conv4_2']
 content_layer = ['conv4_2']
 
+
 def main(config):
 
     print(config)
@@ -51,23 +50,13 @@ def main(config):
 
     vgg19 = VGG19().to(device)
     # Loading pretrained model
-    pretrained_dict = torch.load(config.vgg)
-    temp_dict = collections.OrderedDict()
-    vgg19_dict = vgg19.state_dict()
-    pretrained_keys = list(pretrained_dict.keys())
-    vgg19_keys = list(vgg19_dict.keys())
-    for i in range(len(vgg19_keys)):
-        temp_dict[vgg19_keys[i]] = pretrained_dict[pretrained_keys[i]]
-
-    vgg19_dict.update(temp_dict)
-    vgg19.load_state_dict(vgg19_dict)
+    vgg19.load_model(config.vgg)
     # Fix parameters
     vgg19.eval()
 
     generator = Generator(image_size=config.image_size).to(device)
     # generator = Generator().to(device)
     cxLoss = CXLoss(sigma=0.5).to(device)
-    recLoss = torch.nn.MSELoss().to(device)
 
     if config.load_model:
         generator.load_state_dict(torch.load(config.load_model))
@@ -104,16 +93,14 @@ def main(config):
                 cx_content_loss += cxLoss(vgg_source[s], vgg_fake[s])
             cx_content_loss *= config.lambda_content
 
-            recon_loss = config.lambda_rec * recLoss(fake, source)
-
-            loss = cx_style_loss + cx_content_loss + recon_loss
+            loss = cx_style_loss + cx_content_loss
 
             loss.backward()
             optimizer.step()
 
             if i % 100 == 0:
                 print("Epoch: %d/%d | Step: %d/%d | Style loss: %f | Content loss: %f | Recon loss: %f | Loss: %f" %
-                      (epoch, config.epochs, i, len(train_loader), cx_style_loss.item(), cx_content_loss.item(), recon_loss.item(), loss.item()))
+                      (epoch, config.epochs, i, len(train_loader), cx_style_loss.item(), cx_content_loss.item(), loss.item()))
 
             if (i + 1) % 500 == 0:
                 torch.save(generator.state_dict(), join(config.ckpt_path, 'epoch-%d.pkl' % epoch))
@@ -146,9 +133,7 @@ def main(config):
             plt.imshow(tensor2image(style))
             plt.title('style')
             plt.subplot(133)
-            fake = (fake.detach().cpu().numpy()[0].transpose((1, 2, 0)) * 255).astype(np.uint8)
-            fake = np.minimum(np.maximum(fake, 0.0), 255.0)
-            plt.imshow(fake.astype(np.uint8))
+            plt.imshow(tensor2image(fake))
             plt.title('fake')
             plt.savefig(join(result_path, 'step-%d.png' % (i+1)))
         generator.train()
@@ -187,9 +172,7 @@ def test(config):
         plt.imshow(tensor2image(source))
         plt.title('source')
         plt.subplot(122)
-        fake = (fake.detach().cpu().numpy()[0].transpose((1, 2, 0)) * 255).astype(np.uint8)
-        fake = np.minimum(np.maximum(fake, 0.0), 255.0)
-        plt.imshow(fake.astype(np.uint8))
+        plt.imshow(tensor2image(fake))
         plt.title('fake')
         plt.savefig(join(config.result_path, 'step-%d.png' % (i+1)))
     generator.train()
@@ -216,8 +199,6 @@ if __name__ == '__main__':
     parser.add_argument('--start_idx', type=int, default=0)
     # 1 train | 0 test
     parser.add_argument('--train', type=int, default=1)
-
-    parser.add_argument('--recon_loss', type=int, default=1)
 
     config = parser.parse_args()
 
