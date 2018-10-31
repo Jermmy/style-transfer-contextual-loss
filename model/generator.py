@@ -73,8 +73,6 @@ class CXLoss(nn.Module):
         # NHWC
         dist = torch.cat(dist, dim=0)
 
-        print(dist.shape)
-
         raw_dist = (1. - dist) / 2.
 
         relative_dist = self.calc_relative_distances(raw_dist)

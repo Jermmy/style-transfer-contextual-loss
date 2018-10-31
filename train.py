@@ -99,7 +99,7 @@ def main(config):
             optimizer.step()
 
             if i % 100 == 0:
-                print("Epoch: %d/%d | Step: %d/%d | Style loss: %f | Content loss: %f | Recon loss: %f | Loss: %f" %
+                print("Epoch: %d/%d | Step: %d/%d | Style loss: %f | Content loss: %f | Loss: %f" %
                       (epoch, config.epochs, i, len(train_loader), cx_style_loss.item(), cx_content_loss.item(), loss.item()))
 
             if (i + 1) % 500 == 0:
@@ -144,11 +144,9 @@ def test(config):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    normalize = transforms.Normalize(mean=mean, std=std)
     transform = transforms.Compose([
         transforms.Resize((config.image_size, config.image_size)),
         transforms.ToTensor(),
-        # normalize
     ])
 
     test_dataset = TestDataset(test_dir=config.test_dir, transforms=transform)
