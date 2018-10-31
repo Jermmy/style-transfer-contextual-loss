@@ -2,6 +2,7 @@ from torchvision.models import VGG, vgg19
 import torch.nn as nn
 import torch
 
+
 def conv2d(in_channels, out_channels):
     return nn.Sequential(
         nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),
@@ -22,10 +23,10 @@ class VGG19(nn.Module):
         super(VGG19, self).__init__()
         self.conv1_1 = nn.Sequential(conv(3, 64), nn.ReLU())
         self.conv1_2 = nn.Sequential(conv(64, 64), nn.ReLU())
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=False)
+        self.pool1 = nn.AvgPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=False)
         self.conv2_1 = nn.Sequential(conv(64, 128), nn.ReLU())
         self.conv2_2 = nn.Sequential(conv(128, 128), nn.ReLU())
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=False)
+        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=False)
         self.conv3_1 = nn.Sequential(conv(128, 256), nn.ReLU())
         self.conv3_2 = nn.Sequential(conv(256, 256), nn.ReLU())
         self.conv3_3 = nn.Sequential(conv(256, 256), nn.ReLU())
@@ -43,12 +44,10 @@ class VGG19(nn.Module):
             vgg19_dict[k] = pretrained_dict[pk]
         self.load_state_dict(vgg19_dict)
 
-    def forward(self, x):
-        input = x * 1.0
-        for j in range(len(mean)):
-            input[:, j, :, :] = (input[:, j, :, :] - mean[j]) / std[j]
+    def forward(self, input_images):
+        input_images = (input_images - mean) / std
         feature = {}
-        feature['conv1_1'] = self.conv1_1(input)
+        feature['conv1_1'] = self.conv1_1(input_images)
         feature['conv1_2'] = self.conv1_2(feature['conv1_1'])
         feature['pool1'] = self.pool1(feature['conv1_2'])
         feature['conv2_1'] = self.conv2_1(feature['pool1'])
@@ -61,6 +60,8 @@ class VGG19(nn.Module):
         feature['pool3'] = self.pool3(feature['conv3_4'])
         feature['conv4_1'] = self.conv4_1(feature['pool3'])
         feature['conv4_2'] = self.conv4_2(feature['conv4_1'])
+
         return feature
+
 
 

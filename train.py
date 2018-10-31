@@ -12,14 +12,9 @@ import matplotlib.pyplot as plt
 import os
 from os.path import exists, join
 
-mean = [0.485, 0.456, 0.406]
-std = [0.229, 0.224, 0.225]
-
 
 def tensor2image(T):
     image = T.detach().cpu().numpy()[0].transpose((1, 2, 0))
-    # for i in range(len(mean)):
-    #     image[:, :, i] = (image[:, :, i] * std[i]) + mean[i]
     image = image * 255.
     image = np.minimum(np.maximum(image, 0.0), 255.0)
 
@@ -79,6 +74,7 @@ def main(config):
 
             vgg_source = vgg19(source)
             vgg_style = vgg19(style)
+
             # fake = generator(source, style)
             fake = generator(source)
             vgg_fake = vgg19(fake)
