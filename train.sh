@@ -1,5 +1,5 @@
 lr=1e-3
-batch_size=1
+batch_size=2
 lambda_style=1.0
 lambda_content=1.0
 model_path=lr_${lr}_bs_${batch_size}_style_${lambda_style}_content_${lambda_content}

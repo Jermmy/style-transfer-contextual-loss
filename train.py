@@ -1,16 +1,20 @@
-from model.generator import Generator, CXLoss
-from dataloader.dataset import TrainDataset, TestDataset
-from model.vgg import VGG19
+import argparse
+import os
+from os.path import exists, join
+
+import matplotlib
+matplotlib.use('agg')
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.optim as optim
 import torchvision.transforms as transforms
-import numpy as np
-import argparse
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
-import os
-from os.path import exists, join
+
+from dataloader.dataset import TestDataset, TrainDataset
+from model.generator import Generator, CXLoss
+from model.vgg import VGG19
+# from model.CX_distance import CX_loss
 
 
 def tensor2image(T):
@@ -51,7 +55,7 @@ def main(config):
 
     generator = Generator(image_size=config.image_size).to(device)
     # generator = Generator().to(device)
-    cxLoss = CXLoss(sigma=0.5).to(device)
+    CX_loss = CXLoss(sigma=0.5).to(device)
 
     if config.load_model:
         generator.load_state_dict(torch.load(config.load_model))
@@ -81,12 +85,12 @@ def main(config):
 
             cx_style_loss = 0
             for s in style_layer:
-                cx_style_loss += cxLoss(vgg_style[s], vgg_fake[s])
+                cx_style_loss += CX_loss(vgg_style[s], vgg_fake[s])
             cx_style_loss *= config.lambda_style
 
             cx_content_loss = 0
             for s in content_layer:
-                cx_content_loss += cxLoss(vgg_source[s], vgg_fake[s])
+                cx_content_loss += CX_loss(vgg_source[s], vgg_fake[s])
             cx_content_loss *= config.lambda_content
 
             loss = cx_style_loss + cx_content_loss
@@ -96,7 +100,8 @@ def main(config):
 
             if i % 100 == 0:
                 print("Epoch: %d/%d | Step: %d/%d | Style loss: %f | Content loss: %f | Loss: %f" %
-                      (epoch, config.epochs, i, len(train_loader), cx_style_loss.item(), cx_content_loss.item(), loss.item()))
+                      (epoch, config.epochs, i, len(train_loader), cx_style_loss.item(), cx_content_loss.item(),
+                       loss.item()))
 
             if (i + 1) % 500 == 0:
                 torch.save(generator.state_dict(), join(config.ckpt_path, 'epoch-%d.pkl' % epoch))

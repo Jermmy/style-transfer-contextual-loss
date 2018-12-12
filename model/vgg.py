@@ -1,4 +1,3 @@
-from torchvision.models import VGG, vgg19
 import torch.nn as nn
 import torch
 
@@ -13,14 +12,11 @@ def conv(in_channels, out_channels):
     return nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
 
 
-mean = [0.485, 0.456, 0.406]
-std = [0.229, 0.224, 0.225]
-
-
 class VGG19(nn.Module):
-
     def __init__(self):
         super(VGG19, self).__init__()
+        self.mean = torch.tensor([0.485, 0.456, 0.406]).unsqueeze(0).unsqueeze(2).unsqueeze(3)
+        self.std = torch.tensor([0.229, 0.224, 0.225]).unsqueeze(0).unsqueeze(2).unsqueeze(3)
         self.conv1_1 = nn.Sequential(conv(3, 64), nn.ReLU())
         self.conv1_2 = nn.Sequential(conv(64, 64), nn.ReLU())
         self.pool1 = nn.AvgPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=False)
@@ -45,7 +41,7 @@ class VGG19(nn.Module):
         self.load_state_dict(vgg19_dict)
 
     def forward(self, input_images):
-        input_images = (input_images - mean) / std
+        input_images = (input_images - self.mean) / self.std
         feature = {}
         feature['conv1_1'] = self.conv1_1(input_images)
         feature['conv1_2'] = self.conv1_2(feature['conv1_1'])
@@ -62,6 +58,3 @@ class VGG19(nn.Module):
         feature['conv4_2'] = self.conv4_2(feature['conv4_1'])
 
         return feature
-
-
-
